@@ -2,14 +2,15 @@
   <v-app>
     <v-main>
       <v-container>
-        <v-row v-if="loaded" class="d-flex justify-center align-center text-center" style="height:100vh">
+        <v-row v-if="!error" class="d-flex justify-center align-center text-center" style="height:100vh">
           <v-col>
             <v-row>
               <v-col>
-                <p>Campaign {{ campaignsData[selectedCampaign].name }} - ID: {{ campaignsData[selectedCampaign].id }}</p>
+                <p v-if="loaded">Campaign {{ campaignsData[selectedCampaign].name }} - ID: {{ campaignsData[selectedCampaign].id }}</p>
+                <v-skeleton-loader v-else type="text"/>
               </v-col>
               <v-col>
-                <v-menu>
+                <v-menu v-if="loaded">
                   <template v-slot:activator="{ on, attrs }">
                     <v-btn
                       color="primary"
@@ -35,31 +36,70 @@
             <v-row>
               <v-col>
                 <v-row>
-                  <Chart :chartdata="campaignsData[selectedCampaign]" :options="options" :styles="styles" />
+                  <Chart v-if="loaded" :chartdata="campaignsData[selectedCampaign]" :styles="styles" />
+                  <v-skeleton-loader v-else type="image" width="100%" />
                 </v-row>
-                <v-row>
+                <v-row v-if="loaded" class="text-left">
+                  <v-col cols="12" md="6">
+                    <v-card>
+                      <v-card-title>Statistics</v-card-title>
+                      <v-card-text>
+                        <v-row>
+                          <v-card-subtitle class="font-weight-bold">Average CPC:</v-card-subtitle>
+                          <span>
+                            <v-card-text>{{ getAverageCPC }}</v-card-text>
+                          </span>
+                        </v-row>
+                        <v-row>
+                          <v-card-subtitle class="font-weight-bold">Average Spend:</v-card-subtitle>
+                          <span>
+                            <v-card-text>{{ getAverageSpend }}</v-card-text>
+                          </span>
+                        </v-row>
+                        <v-row>
+                          <v-card-subtitle class="font-weight-bold">Average Clicks:</v-card-subtitle>
+                          <span>
+                            <v-card-text>{{ getAverageClicks }}</v-card-text>
+                          </span>
+                        </v-row>
+                      </v-card-text>
+                    </v-card>
+                  </v-col>
+                  <v-col cols="12" md="6">
+                    <v-card>
+                      <v-card-title>Week by week detail</v-card-title>
+                      <v-card-text>
+                        <v-row v-for="(period, index) in campaignsData[selectedCampaign].fullPeriods" :key="period">
+                          <v-col>
+                            <v-card-subtitle class="font-weight-bold">{{ period }}</v-card-subtitle>
+                            <v-row>
+                              <v-card-subtitle>CPC: {{ campaignsData[selectedCampaign].datasets[0].data[index] }}</v-card-subtitle>
+                              <v-card-subtitle>Spend: {{ campaignsData[selectedCampaign].spend[index] }}</v-card-subtitle>
+                              <v-card-subtitle>Clicks: {{ campaignsData[selectedCampaign].clicks[index] }}</v-card-subtitle>
+                            </v-row>
+                            <v-divider v-if="index < campaignsData[selectedCampaign].fullPeriods.length - 1" />
+                          </v-col>
+                        </v-row>
+                      </v-card-text>
+                    </v-card>
+                  </v-col>
+                </v-row>
+                <v-row v-else>
                   <v-col>
-                    <h1>Statistics</h1>
-                    <v-row>
-                      <v-col>
-                        <h3>Average CPC</h3>
-                        <h4>{{ getAverageCPC }}</h4>
-                      </v-col>
-                    </v-row>
-                    <v-row>
-                      <v-col>
-                        <h3>Average Spend</h3>
-                        <p>{{ getAverageSpend }}</p>
-                      </v-col>
-                      <v-col>
-                        <h3>Average Clicks</h3>
-                        <p>{{ getAverageClicks }}</p>
-                      </v-col>
-                    </v-row>
+                    <v-skeleton-loader width="100%" type="card" />
+                  </v-col>
+                  <v-col>
+                    <v-skeleton-loader width="100%" type="card"/>
                   </v-col>
                 </v-row>
               </v-col>
             </v-row>
+          </v-col>
+        </v-row>
+        <v-row v-else class="d-flex justify-center align-center text-center" style="height:100vh">
+          <v-col>
+            <h1>Whoops... Looks like there has been an error while retrieving the data</h1>
+            <v-btn color="primary" @click="fetchData">Refresh</v-btn>
           </v-col>
         </v-row>
       </v-container>
@@ -86,26 +126,41 @@ export default {
     }
   }),
   async mounted() {
-    try {
-      const rawData = await (await fetch('http://localhost:3001/facebook/getCpc')).json()
-      this.prepareData(rawData)
-    } catch(e) {
-      this.error = true
-      console.log(e)
-    }
+    this.fetchData()
   },
   methods: {
+    // Data fetching would probably be best placed in Vuex for better reusability in other components
+    // Data fetching could also be reduced by storing the timestamp of the latest fetch, and retrieving
+    // the data directly from Vuex by having a timestamp comparison function, although in that case
+    // there will have to be a tradeoff of how often new data should be fetched in order to prevent stale results
+    async fetchData() {
+      this.loaded = false
+      this.error = false
+      try {
+        const rawData = await (await fetch('http://localhost:3001/facebook/getCpc')).json()
+        if (!rawData || Object.keys(rawData).length === 0) throw "Empty response"
+        this.prepareData(rawData)
+        this.loaded = true
+      } catch(e) {
+        this.error = true
+        console.log(e)
+      }
+    },
+    // Data preparation, same as with data fetching, would be better placed in Vuex for reusability
     prepareData(data) {
       for(let [key, value] of Object.entries(data)) {
         this.campaignsData.push({
           id: key,
           name: value.name,
           labels: value.weeklyData.map(week => week.date_start),
-          datasets: [{
-            label: 'CPC',
-            data: value.weeklyData.map(week => week.cpc),
-            borderColor: '#1976d2',
-          }],
+          fullPeriods: value.weeklyData.map(week => `${week.date_start} - ${week.date_stop}`),
+          datasets: [
+            {
+              label: 'CPC',
+              data: value.weeklyData.map(week => week.cpc),
+              borderColor: '#1976d2',
+            }
+          ],
           spend: value.weeklyData.map(week => week.spend),
           clicks: value.weeklyData.map(week => week.clicks)
         })
@@ -114,6 +169,7 @@ export default {
     },
   },
   computed: {
+    // Getters to calculate averages for the selected campaign on the fly
     getAverageCPC() {
       let cpc = 0
       this.campaignsData[this.selectedCampaign].datasets[0].data.forEach(weeklyCpc => cpc += parseFloat(weeklyCpc))

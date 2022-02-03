@@ -1,23 +1,35 @@
 const express = require('express')
 const FB = require('fb')
 
-// A function to get the routes.
-// That way all the route definitions are in one place which I like.
-// This is the only thing that's exported
+// function to get all the routes related to the Facebook endpoints
 function getFBRoutes() {
   const router = express.Router()
   router.get('/getCpc', getCpc)
   return router
 }
 
+// this function gets executed on GET request to the /facebook/getCpc endpoint
+// for sake of simplicity, I chose to place it here, but as the application grows
+// these processing functions would be better placed in a business logic folder
 async function getCpc(req, res) {
   // bumped version to v11 due to v7 deprecation
   FB.options({version: 'v11.0'})
   FB.setAccessToken(process.env.ACCESS_TOKEN);
+
+  let weeklyCpc
   
-  const weeklyCpc = await FB.api('act_25064918/insights?fields=campaign_id,campaign_name,cpc,clicks,spend&level=campaign&time_increment=7', 'get')
+  try {
+    // this request can be made more flexible by passing in an array of fields and a custom time increment by params from the frontend
+    // which will then give the user more liberty on which data he wishes to see
+    // although the grouping logic down the line would have to be reworked to accomodate the lesser/additional fields
+    weeklyCpc = await FB.api('act_25064918/insights?fields=campaign_id,campaign_name,cpc,clicks,spend&level=campaign&time_increment=7', 'get')
+  } catch(error) {
+    console.log(error)
+    res.error(error)
+  }
 
   // data grouped by campaign in case there were multiple campaigns
+  // and to get a clean and structured result as a response
   let groupedData = {}
 
   weeklyCpc.data.forEach(item => {

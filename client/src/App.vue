@@ -36,7 +36,23 @@
             <v-row>
               <v-col>
                 <v-row>
-                  <Chart v-if="loaded" :chartdata="campaignsData[selectedCampaign]" :styles="styles" />
+                  <v-card v-if="loaded" style="width: 100%; height: 20%" elevation="0">
+                    <v-window v-model="currentChart" style="width: 100%; height: 20%">
+                      <v-window-item>
+                        <Chart :chartdata="campaignsData[selectedCampaign]" :styles="styles" />
+                      </v-window-item>
+                      <v-window-item>
+                        <Chart :chartdata="campaignsData[selectedCampaign].spendGraph" :styles="styles" />
+                      </v-window-item>
+                      <v-window-item>
+                        <Chart :chartdata="campaignsData[selectedCampaign].clicksGraph" :styles="styles" />
+                      </v-window-item>
+                    </v-window>
+                    <v-card-actions class="justify-space-between">
+                      <v-btn @click="prevChart">Previous</v-btn>
+                      <v-btn @click="nextChart">Next</v-btn>
+                    </v-card-actions>
+                  </v-card>
                   <v-skeleton-loader v-else type="image" width="100%" />
                 </v-row>
                 <v-row v-if="loaded" class="text-left">
@@ -116,6 +132,7 @@ export default {
   },
   name: 'App',
   data: () => ({
+    currentChart: 0,
     loaded: false,
     error: false,
     campaignsData: [],
@@ -147,6 +164,7 @@ export default {
       }
     },
     // Data preparation, same as with data fetching, would be better placed in Vuex for reusability
+    // this methods fills the data necessary to display the main CPC chart, and additional Spend and Clicks graphs
     prepareData(data) {
       for(let [key, value] of Object.entries(data)) {
         this.campaignsData.push({
@@ -162,11 +180,45 @@ export default {
             }
           ],
           spend: value.weeklyData.map(week => week.spend),
-          clicks: value.weeklyData.map(week => week.clicks)
+          clicks: value.weeklyData.map(week => week.clicks),
+          spendGraph: {
+            labels: value.weeklyData.map(week => week.date_start),
+            datasets: [
+              {
+                label: 'Spend',
+                data: value.weeklyData.map(week => week.spend),
+                borderColor: '#1976d2',
+              }
+            ],
+          },
+          clicksGraph: {
+            labels: value.weeklyData.map(week => week.date_start),
+            datasets: [
+              {
+                label: 'Clicks',
+                data: value.weeklyData.map(week => week.clicks),
+                borderColor: '#1976d2',
+              }
+            ],
+          },
         })
       }
       this.loaded = true
     },
+    prevChart() {
+      if (this.currentChart - 1 < 0) {
+        this.currentChart = 2
+      } else {
+        this.currentChart -= 1
+      }
+    },
+    nextChart() {
+      if (this.currentChart + 1 > 2) {
+        this.currentChart = 0
+      } else {
+        this.currentChart += 1
+      }
+    }
   },
   computed: {
     // Getters to calculate averages for the selected campaign on the fly

@@ -12,6 +12,7 @@ Since there is only one campaign, the dropdown and the API responds only with on
 ## How to run
 In separate terminals, navigate to the client and server folders respectively, then
 
+- Create the .env file in the server folder, with the content `ACCESS_TOKEN=<FB_TOKEN>`
 - In the client folder: `npm install && npm run serve`
 - In the server folder: `npm install && npm run dev`
 
